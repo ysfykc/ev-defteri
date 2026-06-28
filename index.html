@@ -635,7 +635,7 @@
 // ── CONFIG ──────────────────────────────────────────────────────────
 const FIREBASE_CONFIG = {
   apiKey:            "AIzaSyBIKyuU9UF2V29ljHXL7KCBLKeeJmXlc5k",
-  authDomain:        "ev-defteri.firebaseapp.com",
+  authDomain:        "ysfykc.github.io",
   projectId:         "ev-defteri",
   storageBucket:     "ev-defteri.firebasestorage.app",
   messagingSenderId: "505224929915",
@@ -647,33 +647,24 @@ firebase.initializeApp(FIREBASE_CONFIG);
 const auth = firebase.auth();
 const db   = firebase.firestore();
 const provider = new firebase.auth.GoogleAuthProvider();
+provider.setCustomParameters({ client_id: '485904329467-dhscfo5kgf0doao59oe2e28vdvsrkelp.apps.googleusercontent.com' });
 
 let currentUser = null;
 
 // ── AUTH ────────────────────────────────────────────────────────────
 function signIn() {
-  // Önce popup dene, mobile'da engelleniyor olabilir — redirect'e düş
-  auth.signInWithPopup(provider).catch(err => {
-    if (err.code === 'auth/popup-blocked' || err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
-      auth.signInWithRedirect(provider);
-    } else {
-      showToast('Giriş hatası: ' + err.code);
-      console.error(err);
-    }
-  });
+  auth.signInWithRedirect(provider);
 }
 function signOut() {
   auth.signOut().then(() => { closeModal('profile-modal'); });
 }
 
-// Redirect sonucunu yakala
+// Redirect dönüşünü yakala
 auth.getRedirectResult().then(result => {
   if (result && result.user) {
-    console.log('Redirect ile giriş başarılı:', result.user.email);
+    console.log('Giriş tamam:', result.user.email);
   }
-}).catch(e => {
-  if (e.code !== 'auth/no-auth-event') console.warn('Redirect result:', e.code);
-});
+}).catch(e => console.warn('Redirect:', e.code));
 
 auth.onAuthStateChanged(user => {
   if (user) {
