@@ -977,9 +977,15 @@ async function saveKira() {
 async function loadOdemeler() {
   try {
     const s=await col('odemeler').get();
-    state.odemeler=s.docs.map(d=>({id:d.id,...d.data()}))
-      .sort((a,b)=>b.yil-a.yil||b.ay-a.ay);
-  } catch(e){state.odemeler=[];}
+    const raw=s.docs.map(d=>({id:d.id,...d.data()}));
+    console.log('Ödemeler ham:', JSON.stringify(raw.map(o=>({tip:o.tip,ay:o.ay,yil:o.yil,tutar:o.tutar}))));
+    // Tip normalizasyonu: eski kayıtlarda farklı değer olabilir
+    state.odemeler=raw.map(o=>({
+      ...o,
+      tip:(['kiraci','kiracı','kiracim','tenant'].includes((o.tip||'').toLowerCase().trim()))
+          ?'kiraci':'kendi'
+    })).sort((a,b)=>b.yil-a.yil||b.ay-a.ay);
+  } catch(e){state.odemeler=[];console.error('loadOdemeler:',e);}
 }
 let odemeType='kendi';
 function setOdemeType(t){
