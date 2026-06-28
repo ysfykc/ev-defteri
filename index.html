@@ -775,14 +775,20 @@ function col(name) { return db.collection('users').doc(uid()).collection(name); 
 let state = { kiraci: null, kira: null, odemeler: [], onarimlar: [] };
 
 async function loadAll() {
-  await Promise.all([loadKiraci(), loadKira(), loadOdemeler(), loadOnarimlar()]);
+  try {
+    await Promise.all([loadKiraci(), loadKira(), loadOdemeler(), loadOnarimlar()]);
+  } catch(e) {
+    console.warn('loadAll hata:', e);
+  }
   renderOzet();
 }
 
 // KİRACI
 async function loadKiraci() {
-  const snap = await col('kiraci').orderBy('createdAt','desc').limit(1).get();
-  state.kiraci = snap.empty ? null : { id: snap.docs[0].id, ...snap.docs[0].data() };
+  try {
+    const snap = await col('kiraci').limit(1).get();
+    state.kiraci = snap.empty ? null : { id: snap.docs[0].id, ...snap.docs[0].data() };
+  } catch(e) { state.kiraci = null; }
   renderKiraci();
 }
 async function saveKiraci() {
@@ -808,8 +814,10 @@ async function saveKiraci() {
 
 // KİRA SÖZLEŞMESİ
 async function loadKira() {
-  const snap = await col('kira').orderBy('createdAt','desc').limit(1).get();
-  state.kira = snap.empty ? null : { id: snap.docs[0].id, ...snap.docs[0].data() };
+  try {
+    const snap = await col('kira').limit(1).get();
+    state.kira = snap.empty ? null : { id: snap.docs[0].id, ...snap.docs[0].data() };
+  } catch(e) { state.kira = null; }
   renderKira();
 }
 async function saveKira() {
@@ -833,8 +841,11 @@ async function saveKira() {
 
 // ÖDEMELER
 async function loadOdemeler() {
-  const snap = await col('odemeler').orderBy('yil','desc').orderBy('ay','desc').get();
-  state.odemeler = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  try {
+    const snap = await col('odemeler').get();
+    state.odemeler = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .sort((a,b) => b.yil - a.yil || b.ay - a.ay);
+  } catch(e) { state.odemeler = []; }
 }
 let odemeType = 'kendi';
 function setOdemeType(t) {
@@ -867,8 +878,11 @@ async function deleteOdeme(id) {
 
 // ONARIM
 async function loadOnarimlar() {
-  const snap = await col('onarimlar').orderBy('tarih','desc').get();
-  state.onarimlar = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  try {
+    const snap = await col('onarimlar').get();
+    state.onarimlar = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .sort((a,b) => (b.tarih || '').localeCompare(a.tarih || ''));
+  } catch(e) { state.onarimlar = []; }
   renderOnarim();
 }
 let onarimEv = 'kendi';
