@@ -1,0 +1,1115 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#1a1a2e">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Ev Defteri</title>
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
+<style>
+  /* ── TOKENS ─────────────────────────────────────────────── */
+  :root {
+    --bg:        #0f0f1a;
+    --surface:   #1a1a2e;
+    --surface2:  #22223b;
+    --border:    #2e2e4a;
+    --accent:    #7c6fef;
+    --accent2:   #c084fc;
+    --green:     #4ade80;
+    --red:       #f87171;
+    --amber:     #fbbf24;
+    --text:      #f0eeff;
+    --muted:     #8b8aa8;
+    --radius:    16px;
+    --radius-sm: 10px;
+    --font-body: 'DM Sans', system-ui, sans-serif;
+    --font-disp: 'Instrument Serif', Georgia, serif;
+    --safe-top:    env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  /* ── RESET ──────────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--font-body); overflow: hidden; }
+
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=Instrument+Serif:ital@0;1&display=swap');
+
+  /* ── LOGIN ──────────────────────────────────────────────── */
+  #login-screen {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    height: 100%; gap: 32px; padding: 40px 24px;
+    background: radial-gradient(ellipse at 60% 20%, #2d1b6930 0%, transparent 60%),
+                radial-gradient(ellipse at 20% 80%, #7c6fef18 0%, transparent 50%), var(--bg);
+  }
+  .login-icon { font-size: 64px; line-height: 1; }
+  .login-title { font-family: var(--font-disp); font-size: 36px; color: var(--text); text-align: center; }
+  .login-sub { color: var(--muted); font-size: 15px; text-align: center; line-height: 1.5; }
+  .btn-google {
+    display: flex; align-items: center; gap: 12px; background: var(--surface2);
+    border: 1px solid var(--border); border-radius: 50px; padding: 14px 28px;
+    color: var(--text); font-family: var(--font-body); font-size: 15px; font-weight: 500;
+    cursor: pointer; transition: all .2s;
+  }
+  .btn-google:active { transform: scale(.97); background: var(--border); }
+  .btn-google svg { width: 20px; height: 20px; }
+
+  /* ── APP SHELL ──────────────────────────────────────────── */
+  #app {
+    display: none; flex-direction: column; height: 100%;
+    padding-top: var(--safe-top); padding-bottom: var(--safe-bottom);
+  }
+  #app.visible { display: flex; }
+
+  /* ── HEADER ─────────────────────────────────────────────── */
+  .app-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 20px 12px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg);
+  }
+  .header-title { font-family: var(--font-disp); font-size: 22px; color: var(--text); }
+  .header-avatar {
+    width: 34px; height: 34px; border-radius: 50%;
+    border: 2px solid var(--border); cursor: pointer; object-fit: cover;
+  }
+  .header-avatar-placeholder {
+    width: 34px; height: 34px; border-radius: 50%;
+    background: var(--accent); display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 600; cursor: pointer; flex-shrink: 0;
+  }
+
+  /* ── TAB BAR ─────────────────────────────────────────────── */
+  .tab-bar {
+    display: flex; background: var(--surface); border-bottom: 1px solid var(--border);
+  }
+  .tab-btn {
+    flex: 1; padding: 12px 8px; background: none; border: none;
+    color: var(--muted); font-family: var(--font-body); font-size: 12px; font-weight: 500;
+    cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 4px;
+    transition: color .2s; position: relative;
+  }
+  .tab-btn .tab-icon { font-size: 20px; }
+  .tab-btn.active { color: var(--accent2); }
+  .tab-btn.active::after {
+    content: ''; position: absolute; bottom: 0; left: 20%; right: 20%;
+    height: 2px; background: var(--accent2); border-radius: 2px 2px 0 0;
+  }
+
+  /* ── SCROLL AREA ─────────────────────────────────────────── */
+  .scroll-area {
+    flex: 1; overflow-y: auto; padding: 20px 16px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .scroll-area::-webkit-scrollbar { display: none; }
+
+  /* ── PAGES ───────────────────────────────────────────────── */
+  .page { display: none; }
+  .page.active { display: block; }
+
+  /* ── SECTION HEADER ──────────────────────────────────────── */
+  .section-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 14px;
+  }
+  .section-title { font-family: var(--font-disp); font-size: 20px; color: var(--text); }
+  .btn-add {
+    display: flex; align-items: center; gap: 6px;
+    background: var(--accent); color: white;
+    border: none; border-radius: 50px; padding: 8px 16px;
+    font-family: var(--font-body); font-size: 13px; font-weight: 500;
+    cursor: pointer; transition: all .2s;
+  }
+  .btn-add:active { transform: scale(.96); opacity: .9; }
+
+  /* ── CARD ────────────────────────────────────────────────── */
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 18px; margin-bottom: 12px;
+    position: relative; overflow: hidden;
+  }
+  .card-accent-bar {
+    position: absolute; left: 0; top: 0; bottom: 0;
+    width: 4px; background: var(--accent);
+  }
+  .card-accent-bar.kiracı { background: var(--accent2); }
+  .card-accent-bar.green { background: var(--green); }
+  .card-accent-bar.amber { background: var(--amber); }
+
+  .card-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 12px; padding-left: 12px; }
+  .card-title { font-weight: 600; font-size: 16px; color: var(--text); }
+  .card-sub { font-size: 13px; color: var(--muted); margin-top: 2px; }
+  .card-body { padding-left: 12px; }
+
+  /* ── BADGE ───────────────────────────────────────────────── */
+  .badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 11px; font-weight: 600; padding: 4px 10px;
+    border-radius: 50px; text-transform: uppercase; letter-spacing: .5px;
+  }
+  .badge-green { background: #4ade8022; color: var(--green); border: 1px solid #4ade8033; }
+  .badge-red   { background: #f8717122; color: var(--red); border: 1px solid #f8717133; }
+  .badge-amber { background: #fbbf2422; color: var(--amber); border: 1px solid #fbbf2433; }
+  .badge-purple{ background: #7c6fef22; color: var(--accent2); border: 1px solid #7c6fef33; }
+
+  /* ── STAT ROW ────────────────────────────────────────────── */
+  .stat-row {
+    display: flex; gap: 10px; margin-bottom: 14px;
+  }
+  .stat-box {
+    flex: 1; background: var(--surface2); border-radius: var(--radius-sm);
+    padding: 14px 12px; border: 1px solid var(--border);
+  }
+  .stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 4px; }
+  .stat-value { font-size: 20px; font-weight: 600; color: var(--text); }
+  .stat-value.green { color: var(--green); }
+  .stat-value.amber { color: var(--amber); }
+  .stat-value.red { color: var(--red); }
+
+  /* ── COUNTDOWN BANNER ────────────────────────────────────── */
+  .countdown-banner {
+    border-radius: var(--radius-sm); padding: 14px 16px;
+    margin-bottom: 12px; display: flex; align-items: center; gap: 12px;
+  }
+  .countdown-banner.danger { background: #f8717118; border: 1px solid #f8717140; }
+  .countdown-banner.warning { background: #fbbf2418; border: 1px solid #fbbf2440; }
+  .countdown-banner.ok { background: #4ade8012; border: 1px solid #4ade8030; }
+  .countdown-icon { font-size: 24px; flex-shrink: 0; }
+  .countdown-text { flex: 1; }
+  .countdown-title { font-size: 14px; font-weight: 600; }
+  .countdown-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+  /* ── PAYMENT LIST ────────────────────────────────────────── */
+  .payment-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 0; border-bottom: 1px solid var(--border);
+  }
+  .payment-item:last-child { border-bottom: none; }
+  .payment-month { font-size: 14px; font-weight: 500; }
+  .payment-date { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .payment-amount { font-size: 15px; font-weight: 600; text-align: right; }
+  .payment-amount.paid { color: var(--green); }
+  .payment-amount.unpaid { color: var(--muted); }
+  .pay-btn {
+    margin-top: 4px; background: var(--accent); border: none; border-radius: 6px;
+    color: white; font-size: 11px; font-weight: 600; padding: 4px 10px;
+    cursor: pointer; transition: opacity .2s; display: block; text-align: center;
+  }
+  .pay-btn:active { opacity: .7; }
+
+  /* ── ONARIM ITEM ─────────────────────────────────────────── */
+  .repair-item {
+    background: var(--surface2); border-radius: var(--radius-sm);
+    padding: 14px; margin-bottom: 10px; border: 1px solid var(--border);
+    display: flex; gap: 12px; align-items: flex-start;
+  }
+  .repair-cat-icon { font-size: 28px; flex-shrink: 0; width: 40px; text-align: center; }
+  .repair-body { flex: 1; min-width: 0; }
+  .repair-title { font-size: 14px; font-weight: 600; }
+  .repair-desc { font-size: 13px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .repair-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
+  .repair-amount { font-size: 15px; font-weight: 600; color: var(--accent2); }
+  .repair-date { font-size: 11px; color: var(--muted); }
+
+  /* ── EMPTY STATE ─────────────────────────────────────────── */
+  .empty-state {
+    display: flex; flex-direction: column; align-items: center;
+    padding: 48px 24px; gap: 12px;
+  }
+  .empty-icon { font-size: 48px; opacity: .4; }
+  .empty-title { font-size: 16px; font-weight: 500; color: var(--muted); }
+  .empty-sub { font-size: 13px; color: var(--muted); opacity: .7; text-align: center; }
+
+  /* ── MODAL ───────────────────────────────────────────────── */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; background: #00000080;
+    backdrop-filter: blur(4px); z-index: 100; align-items: flex-end;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--surface); border-radius: 24px 24px 0 0;
+    width: 100%; max-height: 90vh; overflow-y: auto;
+    padding: 8px 20px 32px; padding-bottom: calc(32px + var(--safe-bottom));
+    animation: slideUp .3s cubic-bezier(.32,.72,0,1);
+  }
+  @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+  .modal-handle { width: 36px; height: 4px; background: var(--border); border-radius: 2px; margin: 12px auto 20px; }
+  .modal-title { font-family: var(--font-disp); font-size: 22px; margin-bottom: 20px; }
+
+  /* ── FORM ────────────────────────────────────────────────── */
+  .form-group { margin-bottom: 16px; }
+  .form-label { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; display: block; }
+  .form-input, .form-select, .form-textarea {
+    width: 100%; background: var(--surface2); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 13px 14px; color: var(--text);
+    font-family: var(--font-body); font-size: 15px; outline: none;
+    transition: border-color .2s; -webkit-appearance: none;
+  }
+  .form-input:focus, .form-select:focus, .form-textarea:focus { border-color: var(--accent); }
+  .form-select option { background: var(--surface2); }
+  .form-textarea { resize: none; min-height: 80px; }
+  .form-row { display: flex; gap: 10px; }
+  .form-row .form-group { flex: 1; }
+  .btn-primary {
+    width: 100%; background: var(--accent); color: white;
+    border: none; border-radius: var(--radius-sm); padding: 15px;
+    font-family: var(--font-body); font-size: 16px; font-weight: 600;
+    cursor: pointer; transition: all .2s; margin-top: 8px;
+  }
+  .btn-primary:active { opacity: .85; transform: scale(.99); }
+  .btn-danger {
+    width: 100%; background: transparent; color: var(--red);
+    border: 1px solid #f8717140; border-radius: var(--radius-sm); padding: 13px;
+    font-family: var(--font-body); font-size: 14px; font-weight: 500;
+    cursor: pointer; margin-top: 10px;
+  }
+
+  /* ── PROFIL MENU ─────────────────────────────────────────── */
+  .profile-menu-item {
+    display: flex; align-items: center; gap: 14px;
+    padding: 16px 0; border-bottom: 1px solid var(--border);
+    cursor: pointer; color: var(--text);
+  }
+  .profile-menu-item:last-child { border-bottom: none; }
+  .profile-menu-icon { font-size: 20px; width: 28px; text-align: center; }
+  .profile-menu-label { font-size: 15px; }
+  .profile-menu-item.danger { color: var(--red); }
+
+  /* ── TOGGLE ──────────────────────────────────────────────── */
+  .segment-ctrl {
+    display: flex; background: var(--surface2); border-radius: 50px;
+    padding: 4px; margin-bottom: 16px; border: 1px solid var(--border);
+  }
+  .segment-btn {
+    flex: 1; padding: 9px 12px; background: none; border: none;
+    border-radius: 50px; color: var(--muted); font-family: var(--font-body);
+    font-size: 13px; font-weight: 500; cursor: pointer; transition: all .2s; text-align: center;
+  }
+  .segment-btn.active { background: var(--accent); color: white; }
+
+  /* ── OZET PAGE ───────────────────────────────────────────── */
+  .ozet-hero {
+    background: linear-gradient(135deg, var(--surface) 0%, #2d1b6940 100%);
+    border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 22px; margin-bottom: 16px; position: relative; overflow: hidden;
+  }
+  .ozet-hero::before {
+    content: '🏠'; position: absolute; right: 16px; top: 16px;
+    font-size: 48px; opacity: .12;
+  }
+  .ozet-hero-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
+  .ozet-hero-amount { font-family: var(--font-disp); font-size: 38px; color: var(--text); }
+  .ozet-hero-sub { font-size: 13px; color: var(--muted); margin-top: 4px; }
+
+  .ozet-list-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 13px 0; border-bottom: 1px solid var(--border);
+  }
+  .ozet-list-item:last-child { border-bottom: none; }
+  .ozet-item-left { display: flex; align-items: center; gap: 10px; }
+  .ozet-item-icon { font-size: 20px; width: 36px; height: 36px; background: var(--surface2); border-radius: 10px; display: flex; align-items: center; justify-content: center; }
+  .ozet-item-label { font-size: 14px; font-weight: 500; }
+  .ozet-item-sub { font-size: 12px; color: var(--muted); }
+  .ozet-item-value { font-size: 15px; font-weight: 600; }
+
+  /* ── LOADING ─────────────────────────────────────────────── */
+  .loading { display: flex; align-items: center; justify-content: center; padding: 40px; }
+  .spinner { width: 28px; height: 28px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── TOAST ───────────────────────────────────────────────── */
+  .toast {
+    position: fixed; bottom: calc(80px + var(--safe-bottom)); left: 50%; transform: translateX(-50%) translateY(20px);
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 50px;
+    padding: 10px 20px; font-size: 14px; font-weight: 500; white-space: nowrap;
+    opacity: 0; transition: all .3s; z-index: 200; pointer-events: none;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ── SWIPE DELETE ────────────────────────────────────────── */
+  .swipeable { position: relative; overflow: hidden; }
+  .delete-action {
+    position: absolute; right: 0; top: 0; bottom: 0;
+    width: 80px; background: var(--red); display: flex; align-items: center;
+    justify-content: center; font-size: 22px; cursor: pointer;
+    transform: translateX(100%); transition: transform .2s;
+  }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="login-icon">🏠</div>
+  <div>
+    <div class="login-title">Ev Defteri</div>
+    <div class="login-sub" style="margin-top:8px">Kiranı, kiracıyı ve ev bakımını<br>tek yerden takip et.</div>
+  </div>
+  <button class="btn-google" onclick="signIn()">
+    <svg viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+    Google ile giriş yap
+  </button>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <div class="app-header">
+    <div class="header-title">Ev Defteri</div>
+    <div id="header-avatar" class="header-avatar-placeholder" onclick="openModal('profile-modal')">Y</div>
+  </div>
+
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="switchTab('ozet')" id="tab-ozet">
+      <span class="tab-icon">📊</span>Özet
+    </button>
+    <button class="tab-btn" onclick="switchTab('kiraci')" id="tab-kiraci">
+      <span class="tab-icon">🔑</span>Kiracı
+    </button>
+    <button class="tab-btn" onclick="switchTab('kira')" id="tab-kira">
+      <span class="tab-icon">🏠</span>Kiram
+    </button>
+    <button class="tab-btn" onclick="switchTab('onarim')" id="tab-onarim">
+      <span class="tab-icon">🔧</span>Bakım
+    </button>
+  </div>
+
+  <div class="scroll-area">
+
+    <!-- ÖZET PAGE -->
+    <div class="page active" id="page-ozet">
+      <div id="ozet-content"><div class="loading"><div class="spinner"></div></div></div>
+    </div>
+
+    <!-- KİRACIM PAGE -->
+    <div class="page" id="page-kiraci">
+      <div class="section-head">
+        <div class="section-title">Kiracım</div>
+        <button class="btn-add" onclick="openModal('kiraci-modal')">+ Ekle</button>
+      </div>
+      <div id="kiraci-content"><div class="loading"><div class="spinner"></div></div></div>
+    </div>
+
+    <!-- KİRAM PAGE -->
+    <div class="page" id="page-kira">
+      <div class="section-head">
+        <div class="section-title">Kira Ödemelerim</div>
+        <button class="btn-add" onclick="openModal('kira-modal')">+ Ekle</button>
+      </div>
+      <div id="kira-content"><div class="loading"><div class="spinner"></div></div></div>
+    </div>
+
+    <!-- ONARIM PAGE -->
+    <div class="page" id="page-onarim">
+      <div class="section-head">
+        <div class="section-title">Bakım & Onarım</div>
+        <button class="btn-add" onclick="openModal('onarim-modal')">+ Ekle</button>
+      </div>
+      <div id="onarim-content"><div class="loading"><div class="spinner"></div></div></div>
+    </div>
+
+  </div><!-- /scroll-area -->
+</div><!-- /app -->
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<!-- ══════════════════ MODALS ══════════════════ -->
+
+<!-- KİRACI MODAL -->
+<div class="modal-overlay" id="kiraci-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Kiracı Bilgileri</div>
+    <div class="form-group">
+      <label class="form-label">Kiracı Adı</label>
+      <input class="form-input" id="kiraci-ad" placeholder="Ad Soyad" type="text">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Telefon</label>
+      <input class="form-input" id="kiraci-tel" placeholder="0555 000 00 00" type="tel">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Adres</label>
+      <input class="form-input" id="kiraci-adres" placeholder="Kiralık evin adresi" type="text">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Aylık Kira (₺)</label>
+        <input class="form-input" id="kiraci-kira" placeholder="0" type="number" inputmode="numeric">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Depozito (₺)</label>
+        <input class="form-input" id="kiraci-depozito" placeholder="0" type="number" inputmode="numeric">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Başlangıç</label>
+        <input class="form-input" id="kiraci-baslangic" type="date">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Bitiş</label>
+        <input class="form-input" id="kiraci-bitis" type="date">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Not</label>
+      <textarea class="form-textarea" id="kiraci-not" placeholder="Ek bilgi..."></textarea>
+    </div>
+    <button class="btn-primary" onclick="saveKiraci()">Kaydet</button>
+    <button class="btn-danger" onclick="closeModal('kiraci-modal')">İptal</button>
+  </div>
+</div>
+
+<!-- KİRA SOZLESMESI MODAL -->
+<div class="modal-overlay" id="kira-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Kira Sözleşmem</div>
+    <div class="form-group">
+      <label class="form-label">Ev Sahibi</label>
+      <input class="form-input" id="kira-sahibi" placeholder="Ev sahibinin adı" type="text">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Adres</label>
+      <input class="form-input" id="kira-adres" placeholder="Oturduğun adres" type="text">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Aylık Kira (₺)</label>
+        <input class="form-input" id="kira-tutar" placeholder="0" type="number" inputmode="numeric">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Depozito (₺)</label>
+        <input class="form-input" id="kira-depozito" placeholder="0" type="number" inputmode="numeric">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Başlangıç</label>
+        <input class="form-input" id="kira-baslangic" type="date">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Bitiş</label>
+        <input class="form-input" id="kira-bitis" type="date">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Her ayın kaçında ödüyorsun?</label>
+      <input class="form-input" id="kira-gun" placeholder="5" type="number" inputmode="numeric" min="1" max="31">
+    </div>
+    <button class="btn-primary" onclick="saveKira()">Kaydet</button>
+    <button class="btn-danger" onclick="closeModal('kira-modal')">İptal</button>
+  </div>
+</div>
+
+<!-- ÖDEME MODAL -->
+<div class="modal-overlay" id="odeme-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Ödeme Ekle</div>
+    <div class="form-group">
+      <label class="form-label">Kime ait?</label>
+      <div class="segment-ctrl">
+        <button class="segment-btn active" onclick="setOdemeType('kendi')" id="otype-kendi">Kira Ödemem</button>
+        <button class="segment-btn" onclick="setOdemeType('kiraci')" id="otype-kiraci">Kiracıdan</button>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Ay</label>
+        <select class="form-select" id="odeme-ay">
+          <option value="1">Ocak</option><option value="2">Şubat</option>
+          <option value="3">Mart</option><option value="4">Nisan</option>
+          <option value="5">Mayıs</option><option value="6">Haziran</option>
+          <option value="7">Temmuz</option><option value="8">Ağustos</option>
+          <option value="9">Eylül</option><option value="10">Ekim</option>
+          <option value="11">Kasım</option><option value="12">Aralık</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Yıl</label>
+        <input class="form-input" id="odeme-yil" type="number" inputmode="numeric">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Tutar (₺)</label>
+      <input class="form-input" id="odeme-tutar" placeholder="0" type="number" inputmode="numeric">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Ödeme Tarihi</label>
+      <input class="form-input" id="odeme-tarih" type="date">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Not (opsiyonel)</label>
+      <input class="form-input" id="odeme-not" placeholder="Banka havalesi, elden..." type="text">
+    </div>
+    <button class="btn-primary" onclick="saveOdeme()">Kaydet</button>
+    <button class="btn-danger" onclick="closeModal('odeme-modal')">İptal</button>
+  </div>
+</div>
+
+<!-- ONARIM MODAL -->
+<div class="modal-overlay" id="onarim-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Bakım / Onarım</div>
+    <div class="form-group">
+      <label class="form-label">Hangi Ev?</label>
+      <div class="segment-ctrl">
+        <button class="segment-btn active" onclick="setOnarimEv('kendi')" id="oev-kendi">Oturduğum</button>
+        <button class="segment-btn" onclick="setOnarimEv('kiraci')" id="oev-kiraci">Kiraya verdiğim</button>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Kategori</label>
+      <select class="form-select" id="onarim-kategori">
+        <option value="🔌 Elektrik">🔌 Elektrik</option>
+        <option value="🚿 Su / Tesisat">🚿 Su / Tesisat</option>
+        <option value="🎨 Boya / Badana">🎨 Boya / Badana</option>
+        <option value="🪟 Kapı / Pencere">🪟 Kapı / Pencere</option>
+        <option value="❄️ Isıtma / Soğutma">❄️ Isıtma / Soğutma</option>
+        <option value="🛋️ Mobilya / Eşya">🛋️ Mobilya / Eşya</option>
+        <option value="🧱 Yapısal">🧱 Yapısal</option>
+        <option value="🔒 Güvenlik">🔒 Güvenlik</option>
+        <option value="🧹 Temizlik">🧹 Temizlik</option>
+        <option value="⚙️ Diğer">⚙️ Diğer</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Açıklama</label>
+      <textarea class="form-textarea" id="onarim-aciklama" placeholder="Ne yapıldı?"></textarea>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Tutar (₺)</label>
+        <input class="form-input" id="onarim-tutar" placeholder="0" type="number" inputmode="numeric">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Tarih</label>
+        <input class="form-input" id="onarim-tarih" type="date">
+      </div>
+    </div>
+    <button class="btn-primary" onclick="saveOnarim()">Kaydet</button>
+    <button class="btn-danger" onclick="closeModal('onarim-modal')">İptal</button>
+  </div>
+</div>
+
+<!-- PROFİL MODAL -->
+<div class="modal-overlay" id="profile-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:24px">
+      <div id="profile-avatar-lg" style="width:52px;height:52px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:600;flex-shrink:0"></div>
+      <div>
+        <div id="profile-name" style="font-size:18px;font-weight:600"></div>
+        <div id="profile-email" style="font-size:13px;color:var(--muted);margin-top:2px"></div>
+      </div>
+    </div>
+    <div class="profile-menu-item danger" onclick="signOut()">
+      <span class="profile-menu-icon">🚪</span>
+      <span class="profile-menu-label">Çıkış Yap</span>
+    </div>
+    <button class="btn-danger" onclick="closeModal('profile-modal')" style="margin-top:16px">Kapat</button>
+  </div>
+</div>
+
+<!-- DETAY MODAL (ödeme geçmişi) -->
+<div class="modal-overlay" id="detay-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="detay-title">Ödeme Geçmişi</div>
+    <div id="detay-content"></div>
+    <button class="btn-danger" onclick="closeModal('detay-modal')" style="margin-top:16px">Kapat</button>
+  </div>
+</div>
+
+<script>
+// ── CONFIG ──────────────────────────────────────────────────────────
+const FIREBASE_CONFIG = {
+  apiKey:            "AIzaSyBIKyuU9UF2V29ljHXL7KCBLKeeJmXlc5k",
+  authDomain:        "ev-defteri.firebaseapp.com",
+  projectId:         "ev-defteri",
+  storageBucket:     "ev-defteri.firebasestorage.app",
+  messagingSenderId: "505224929915",
+  appId:             "1:505224929915:web:f42b8a4fdbcc9567a6b8de"
+};
+// ───────────────────────────────────────────────────────────────────
+
+firebase.initializeApp(FIREBASE_CONFIG);
+const auth = firebase.auth();
+const db   = firebase.firestore();
+const provider = new firebase.auth.GoogleAuthProvider();
+
+let currentUser = null;
+
+// ── AUTH ────────────────────────────────────────────────────────────
+function signIn() {
+  auth.signInWithPopup(provider).catch(e => showToast('Giriş hatası: ' + e.message));
+}
+function signOut() {
+  auth.signOut().then(() => { closeModal('profile-modal'); });
+}
+
+auth.onAuthStateChanged(user => {
+  if (user) {
+    currentUser = user;
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app').classList.add('visible');
+    const initials = (user.displayName || user.email || 'U')[0].toUpperCase();
+    const av = document.getElementById('header-avatar');
+    if (user.photoURL) {
+      av.outerHTML = `<img class="header-avatar" src="${user.photoURL}" onclick="openModal('profile-modal')">`;
+    } else {
+      av.textContent = initials;
+    }
+    document.getElementById('profile-avatar-lg').textContent = initials;
+    document.getElementById('profile-name').textContent = user.displayName || 'Kullanıcı';
+    document.getElementById('profile-email').textContent = user.email;
+    loadAll();
+  } else {
+    currentUser = null;
+    document.getElementById('login-screen').style.display = 'flex';
+    document.getElementById('app').classList.remove('visible');
+  }
+});
+
+// ── NAVİGASYON ──────────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  document.getElementById('page-' + name).classList.add('active');
+}
+
+// ── MODAL ───────────────────────────────────────────────────────────
+function openModal(id) {
+  document.getElementById(id).classList.add('open');
+  if (id === 'odeme-modal') {
+    const now = new Date();
+    document.getElementById('odeme-ay').value = now.getMonth() + 1;
+    document.getElementById('odeme-yil').value = now.getFullYear();
+    document.getElementById('odeme-tarih').value = toDateInput(now);
+  }
+  if (id === 'onarim-modal') {
+    document.getElementById('onarim-tarih').value = toDateInput(new Date());
+  }
+}
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+}
+document.querySelectorAll('.modal-overlay').forEach(el => {
+  el.addEventListener('click', e => { if (e.target === el) el.classList.remove('open'); });
+});
+
+// ── HELPERS ─────────────────────────────────────────────────────────
+const AYLAR = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
+
+function fmt(n) {
+  return Number(n || 0).toLocaleString('tr-TR') + '₺';
+}
+function toDateInput(d) {
+  return d.toISOString().split('T')[0];
+}
+function parseDate(str) {
+  if (!str) return null;
+  const [y, m, d] = str.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+function daysBetween(a, b) {
+  return Math.round((b - a) / 86400000);
+}
+function showToast(msg, dur = 2500) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), dur);
+}
+function uid() { return currentUser.uid; }
+function col(name) { return db.collection('users').doc(uid()).collection(name); }
+
+// ── FIRESTORE CRUD ──────────────────────────────────────────────────
+let state = { kiraci: null, kira: null, odemeler: [], onarimlar: [] };
+
+async function loadAll() {
+  await Promise.all([loadKiraci(), loadKira(), loadOdemeler(), loadOnarimlar()]);
+  renderOzet();
+}
+
+// KİRACI
+async function loadKiraci() {
+  const snap = await col('kiraci').orderBy('createdAt','desc').limit(1).get();
+  state.kiraci = snap.empty ? null : { id: snap.docs[0].id, ...snap.docs[0].data() };
+  renderKiraci();
+}
+async function saveKiraci() {
+  const data = {
+    ad: document.getElementById('kiraci-ad').value.trim(),
+    tel: document.getElementById('kiraci-tel').value.trim(),
+    adres: document.getElementById('kiraci-adres').value.trim(),
+    kira: Number(document.getElementById('kiraci-kira').value) || 0,
+    depozito: Number(document.getElementById('kiraci-depozito').value) || 0,
+    baslangic: document.getElementById('kiraci-baslangic').value,
+    bitis: document.getElementById('kiraci-bitis').value,
+    not: document.getElementById('kiraci-not').value.trim(),
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  };
+  if (!data.ad) { showToast('Ad zorunlu'); return; }
+  if (state.kiraci) await col('kiraci').doc(state.kiraci.id).set(data);
+  else await col('kiraci').add(data);
+  closeModal('kiraci-modal');
+  showToast('Kiracı kaydedildi ✓');
+  await loadKiraci();
+  renderOzet();
+}
+
+// KİRA SÖZLEŞMESİ
+async function loadKira() {
+  const snap = await col('kira').orderBy('createdAt','desc').limit(1).get();
+  state.kira = snap.empty ? null : { id: snap.docs[0].id, ...snap.docs[0].data() };
+  renderKira();
+}
+async function saveKira() {
+  const data = {
+    sahibi: document.getElementById('kira-sahibi').value.trim(),
+    adres: document.getElementById('kira-adres').value.trim(),
+    tutar: Number(document.getElementById('kira-tutar').value) || 0,
+    depozito: Number(document.getElementById('kira-depozito').value) || 0,
+    baslangic: document.getElementById('kira-baslangic').value,
+    bitis: document.getElementById('kira-bitis').value,
+    gun: Number(document.getElementById('kira-gun').value) || 1,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  };
+  if (state.kira) await col('kira').doc(state.kira.id).set(data);
+  else await col('kira').add(data);
+  closeModal('kira-modal');
+  showToast('Sözleşme kaydedildi ✓');
+  await loadKira();
+  renderOzet();
+}
+
+// ÖDEMELER
+async function loadOdemeler() {
+  const snap = await col('odemeler').orderBy('yil','desc').orderBy('ay','desc').get();
+  state.odemeler = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+let odemeType = 'kendi';
+function setOdemeType(t) {
+  odemeType = t;
+  document.getElementById('otype-kendi').classList.toggle('active', t === 'kendi');
+  document.getElementById('otype-kiraci').classList.toggle('active', t === 'kiraci');
+}
+async function saveOdeme() {
+  const data = {
+    tip: odemeType,
+    ay: Number(document.getElementById('odeme-ay').value),
+    yil: Number(document.getElementById('odeme-yil').value),
+    tutar: Number(document.getElementById('odeme-tutar').value) || 0,
+    tarih: document.getElementById('odeme-tarih').value,
+    not: document.getElementById('odeme-not').value.trim(),
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  };
+  await col('odemeler').add(data);
+  closeModal('odeme-modal');
+  showToast('Ödeme eklendi ✓');
+  await loadOdemeler();
+  renderKira(); renderKiraci(); renderOzet();
+}
+async function deleteOdeme(id) {
+  await col('odemeler').doc(id).delete();
+  showToast('Silindi');
+  await loadOdemeler();
+  renderKira(); renderKiraci(); renderOzet();
+}
+
+// ONARIM
+async function loadOnarimlar() {
+  const snap = await col('onarimlar').orderBy('tarih','desc').get();
+  state.onarimlar = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  renderOnarim();
+}
+let onarimEv = 'kendi';
+function setOnarimEv(t) {
+  onarimEv = t;
+  document.getElementById('oev-kendi').classList.toggle('active', t === 'kendi');
+  document.getElementById('oev-kiraci').classList.toggle('active', t === 'kiraci');
+}
+async function saveOnarim() {
+  const data = {
+    ev: onarimEv,
+    kategori: document.getElementById('onarim-kategori').value,
+    aciklama: document.getElementById('onarim-aciklama').value.trim(),
+    tutar: Number(document.getElementById('onarim-tutar').value) || 0,
+    tarih: document.getElementById('onarim-tarih').value,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  };
+  if (!data.aciklama) { showToast('Açıklama girin'); return; }
+  await col('onarimlar').add(data);
+  closeModal('onarim-modal');
+  showToast('Kaydedildi ✓');
+  await loadOnarimlar();
+  renderOzet();
+}
+async function deleteOnarim(id) {
+  if (!confirm('Silinsin mi?')) return;
+  await col('onarimlar').doc(id).delete();
+  showToast('Silindi');
+  await loadOnarimlar();
+  renderOzet();
+}
+
+// ── RENDER ───────────────────────────────────────────────────────────
+
+function countdown(bitisStr, label) {
+  if (!bitisStr) return '';
+  const bitis = parseDate(bitisStr);
+  const today = new Date(); today.setHours(0,0,0,0);
+  const days = daysBetween(today, bitis);
+  const months = Math.round(days / 30);
+  let cls, icon, title, sub;
+  if (days < 0) {
+    cls = 'danger'; icon = '⚠️'; title = `${label} süresi doldu!`; sub = `${Math.abs(days)} gün önce bitti.`;
+  } else if (days <= 30) {
+    cls = 'danger'; icon = '🔴'; title = `${label} sona eriyor!`; sub = `${days} gün kaldı.`;
+  } else if (days <= 90) {
+    cls = 'warning'; icon = '🟡'; title = `${label} yaklaşıyor`; sub = `~${months} ay kaldı.`;
+  } else {
+    cls = 'ok'; icon = '🟢'; title = `${label} devam ediyor`; sub = `~${months} ay kaldı.`;
+  }
+  return `<div class="countdown-banner ${cls}">
+    <div class="countdown-icon">${icon}</div>
+    <div class="countdown-text">
+      <div class="countdown-title">${title}</div>
+      <div class="countdown-sub">${sub} — Bitiş: ${bitisStr.split('-').reverse().join('.')}</div>
+    </div>
+  </div>`;
+}
+
+function renderOzet() {
+  const k = state.kira;
+  const ki = state.kiraci;
+  const now = new Date();
+  const buAy = now.getMonth() + 1;
+  const buYil = now.getFullYear();
+
+  const odenenKira = state.odemeler.filter(o => o.tip === 'kendi').reduce((a,b) => a + b.tutar, 0);
+  const tahsilat   = state.odemeler.filter(o => o.tip === 'kiraci').reduce((a,b) => a + b.tutar, 0);
+  const onarimToplam = state.onarimlar.reduce((a,b) => a + b.tutar, 0);
+
+  const kendiOdedi = state.odemeler.find(o => o.tip === 'kendi' && o.ay === buAy && o.yil === buYil);
+  const kiraciOdedi = state.odemeler.find(o => o.tip === 'kiraci' && o.ay === buAy && o.yil === buYil);
+
+  let html = '';
+
+  // Bu ay durumu
+  html += `<div class="stat-row">
+    <div class="stat-box">
+      <div class="stat-label">Kira Borcum</div>
+      <div class="stat-value ${kendiOdedi ? 'green' : 'amber'}">${kendiOdedi ? '✓ Ödendi' : '⏳ Bekliyor'}</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-label">Kiracıdan</div>
+      <div class="stat-value ${kiraciOdedi ? 'green' : (ki ? 'amber' : 'green')}">${ki ? (kiraciOdedi ? '✓ Tahsil' : '⏳ Bekliyor') : '—'}</div>
+    </div>
+  </div>`;
+
+  // Sayaçlar
+  if (k?.bitis) html += countdown(k.bitis, 'Kira sözleşmem');
+  if (ki?.bitis) html += countdown(ki.bitis, 'Kiracı sözleşmesi');
+
+  // Toplamlar
+  html += `<div class="card"><div class="card-accent-bar"></div>
+    <div class="card-body">
+      <div style="font-family:var(--font-disp);font-size:13px;color:var(--muted);margin-bottom:12px;padding-left:12px">Toplam Hareketler</div>`;
+
+  const items = [
+    { icon: '🏠', label: 'Toplam Ödediğim Kira', val: fmt(odenenKira), color: 'var(--red)' },
+    { icon: '🔑', label: 'Toplam Tahsilat', val: fmt(tahsilat), color: 'var(--green)' },
+    { icon: '🔧', label: 'Toplam Bakım/Onarım', val: fmt(onarimToplam), color: 'var(--amber)' },
+  ];
+  items.forEach(i => {
+    html += `<div class="ozet-list-item">
+      <div class="ozet-item-left">
+        <div class="ozet-item-icon">${i.icon}</div>
+        <div class="ozet-item-label">${i.label}</div>
+      </div>
+      <div class="ozet-item-value" style="color:${i.color}">${i.val}</div>
+    </div>`;
+  });
+  html += `</div></div>`;
+
+  // Hızlı ödeme ekle
+  html += `<div style="display:flex;gap:10px;margin-top:4px">
+    <button class="btn-add" style="flex:1;justify-content:center" onclick="openModal('odeme-modal')">+ Ödeme Ekle</button>
+    <button class="btn-add" style="flex:1;justify-content:center;background:var(--surface2);border:1px solid var(--border);color:var(--text)" onclick="openModal('onarim-modal')">+ Onarım Ekle</button>
+  </div>`;
+
+  document.getElementById('ozet-content').innerHTML = html;
+}
+
+function renderKiraci() {
+  const ki = state.kiraci;
+  if (!ki) {
+    document.getElementById('kiraci-content').innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">🔑</div>
+        <div class="empty-title">Kiracı yok</div>
+        <div class="empty-sub">Kiraya verdiğin ev varsa kiracı bilgilerini ekle.</div>
+      </div>`;
+    return;
+  }
+
+  // Ödemeler
+  const odemeler = state.odemeler.filter(o => o.tip === 'kiraci').sort((a,b) => b.yil - a.yil || b.ay - a.ay);
+  const toplam = odemeler.reduce((s,o) => s + o.tutar, 0);
+
+  let html = '';
+  html += countdown(ki.bitis, 'Kiracı sözleşmesi');
+  html += `<div class="card"><div class="card-accent-bar kiracı"></div>
+    <div class="card-header">
+      <div><div class="card-title">${ki.ad}</div><div class="card-sub">${ki.adres || ''}</div></div>
+      <button class="btn-add" style="font-size:12px;padding:6px 12px" onclick="openModal('kiraci-modal')">Düzenle</button>
+    </div>
+    <div class="card-body">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+        <span class="badge badge-purple">Aylık ${fmt(ki.kira)}</span>
+        <span class="badge badge-amber">Dep. ${fmt(ki.depozito)}</span>
+        ${ki.tel ? `<span class="badge badge-green">${ki.tel}</span>` : ''}
+      </div>
+      ${ki.baslangic || ki.bitis ? `<div style="font-size:13px;color:var(--muted)">${ki.baslangic ? ki.baslangic.split('-').reverse().join('.') : '?'} → ${ki.bitis ? ki.bitis.split('-').reverse().join('.') : '?'}</div>` : ''}
+      ${ki.not ? `<div style="font-size:13px;color:var(--muted);margin-top:6px">${ki.not}</div>` : ''}
+    </div>
+  </div>`;
+
+  html += `<div class="section-head" style="margin-top:20px">
+    <div class="section-title" style="font-size:17px">Tahsilat Geçmişi</div>
+    <span class="badge badge-green">Toplam ${fmt(toplam)}</span>
+  </div>`;
+
+  if (odemeler.length === 0) {
+    html += `<div class="empty-state" style="padding:24px"><div class="empty-icon">📭</div><div class="empty-title">Henüz ödeme yok</div></div>`;
+  } else {
+    html += `<div class="card"><div class="card-body">`;
+    odemeler.forEach(o => {
+      html += `<div class="payment-item">
+        <div><div class="payment-month">${AYLAR[o.ay-1]} ${o.yil}</div><div class="payment-date">${o.tarih ? o.tarih.split('-').reverse().join('.') : ''} ${o.not ? '· ' + o.not : ''}</div></div>
+        <div><div class="payment-amount paid">${fmt(o.tutar)}</div>
+        <div style="color:var(--red);font-size:11px;text-align:right;margin-top:4px;cursor:pointer" onclick="deleteOdeme('${o.id}')">Sil</div></div>
+      </div>`;
+    });
+    html += `</div></div>`;
+  }
+
+  html += `<button class="btn-add" style="width:100%;justify-content:center;margin-top:8px" onclick="setOdemeType('kiraci');openModal('odeme-modal')">+ Tahsilat Ekle</button>`;
+  document.getElementById('kiraci-content').innerHTML = html;
+}
+
+function renderKira() {
+  const k = state.kira;
+  if (!k) {
+    document.getElementById('kira-content').innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">🏠</div>
+        <div class="empty-title">Sözleşme yok</div>
+        <div class="empty-sub">Oturduğun evin kira bilgilerini gir.</div>
+      </div>`;
+    return;
+  }
+
+  const odemeler = state.odemeler.filter(o => o.tip === 'kendi').sort((a,b) => b.yil - a.yil || b.ay - a.ay);
+  const toplam = odemeler.reduce((s,o) => s + o.tutar, 0);
+
+  let html = '';
+  html += countdown(k.bitis, 'Kira sözleşmem');
+  html += `<div class="card"><div class="card-accent-bar"></div>
+    <div class="card-header">
+      <div><div class="card-title">${k.adres || 'Ev'}</div><div class="card-sub">Ev sahibi: ${k.sahibi || '—'}</div></div>
+      <button class="btn-add" style="font-size:12px;padding:6px 12px" onclick="openModal('kira-modal')">Düzenle</button>
+    </div>
+    <div class="card-body">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+        <span class="badge badge-purple">Aylık ${fmt(k.tutar)}</span>
+        <span class="badge badge-amber">Dep. ${fmt(k.depozito)}</span>
+        ${k.gun ? `<span class="badge badge-green">Her ayın ${k.gun}i</span>` : ''}
+      </div>
+      ${k.baslangic || k.bitis ? `<div style="font-size:13px;color:var(--muted)">${k.baslangic ? k.baslangic.split('-').reverse().join('.') : '?'} → ${k.bitis ? k.bitis.split('-').reverse().join('.') : '?'}</div>` : ''}
+    </div>
+  </div>`;
+
+  html += `<div class="section-head" style="margin-top:20px">
+    <div class="section-title" style="font-size:17px">Ödeme Geçmişi</div>
+    <span class="badge badge-purple">Toplam ${fmt(toplam)}</span>
+  </div>`;
+
+  if (odemeler.length === 0) {
+    html += `<div class="empty-state" style="padding:24px"><div class="empty-icon">📭</div><div class="empty-title">Henüz ödeme yok</div></div>`;
+  } else {
+    html += `<div class="card"><div class="card-body">`;
+    odemeler.forEach(o => {
+      html += `<div class="payment-item">
+        <div><div class="payment-month">${AYLAR[o.ay-1]} ${o.yil}</div><div class="payment-date">${o.tarih ? o.tarih.split('-').reverse().join('.') : ''} ${o.not ? '· ' + o.not : ''}</div></div>
+        <div><div class="payment-amount paid">${fmt(o.tutar)}</div>
+        <div style="color:var(--red);font-size:11px;text-align:right;margin-top:4px;cursor:pointer" onclick="deleteOdeme('${o.id}')">Sil</div></div>
+      </div>`;
+    });
+    html += `</div></div>`;
+  }
+
+  html += `<button class="btn-add" style="width:100%;justify-content:center;margin-top:8px" onclick="setOdemeType('kendi');openModal('odeme-modal')">+ Ödeme Ekle</button>`;
+  document.getElementById('kira-content').innerHTML = html;
+}
+
+function renderOnarim() {
+  const onarimlar = state.onarimlar;
+  if (onarimlar.length === 0) {
+    document.getElementById('onarim-content').innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">🔧</div>
+        <div class="empty-title">Onarım kaydı yok</div>
+        <div class="empty-sub">Ev bakımı, onarım veya tadilat harcamalarını buraya ekle.</div>
+      </div>`;
+    return;
+  }
+
+  const toplam = onarimlar.reduce((s,o) => s + o.tutar, 0);
+  const kendiToplam   = onarimlar.filter(o => o.ev === 'kendi').reduce((s,o) => s + o.tutar, 0);
+  const kiraciToplam  = onarimlar.filter(o => o.ev === 'kiraci').reduce((s,o) => s + o.tutar, 0);
+
+  let html = `<div class="stat-row">
+    <div class="stat-box"><div class="stat-label">Oturduğum</div><div class="stat-value amber">${fmt(kendiToplam)}</div></div>
+    <div class="stat-box"><div class="stat-label">Kiraya Verdiğim</div><div class="stat-value amber">${fmt(kiraciToplam)}</div></div>
+  </div>`;
+
+  onarimlar.forEach(o => {
+    const [icon, ...catParts] = o.kategori.split(' ');
+    html += `<div class="repair-item">
+      <div class="repair-cat-icon">${icon}</div>
+      <div class="repair-body">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <div class="repair-title">${catParts.join(' ')}</div>
+          <span class="badge ${o.ev === 'kendi' ? 'badge-purple' : 'badge-amber'}" style="font-size:10px">${o.ev === 'kendi' ? 'Oturduğum' : 'Kiraya verdiğim'}</span>
+        </div>
+        <div class="repair-desc">${o.aciklama}</div>
+        <div class="repair-footer">
+          <div class="repair-amount">${fmt(o.tutar)}</div>
+          <div style="display:flex;align-items:center;gap:12px">
+            <div class="repair-date">${o.tarih ? o.tarih.split('-').reverse().join('.') : ''}</div>
+            <div style="color:var(--red);font-size:12px;cursor:pointer" onclick="deleteOnarim('${o.id}')">Sil</div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  });
+
+  document.getElementById('onarim-content').innerHTML = html;
+}
+</script>
+</body>
+</html>
