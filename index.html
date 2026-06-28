@@ -653,7 +653,14 @@ let currentUser = null;
 
 // ── AUTH ────────────────────────────────────────────────────────────
 function signIn() {
-  auth.signInWithRedirect(provider);
+  const btn = document.querySelector('.btn-google');
+  btn.textContent = 'Yönlendiriliyor...';
+  btn.disabled = true;
+  auth.signInWithRedirect(provider).catch(e => {
+    btn.innerHTML = `<span style="color:#f87171">Hata: ${e.code}</span>`;
+    btn.disabled = false;
+    console.error('signIn error:', e);
+  });
 }
 function signOut() {
   auth.signOut().then(() => { closeModal('profile-modal'); });
@@ -664,7 +671,12 @@ auth.getRedirectResult().then(result => {
   if (result && result.user) {
     console.log('Giriş tamam:', result.user.email);
   }
-}).catch(e => console.warn('Redirect:', e.code));
+}).catch(e => {
+  console.warn('Redirect result hatası:', e.code, e.message);
+  // Hata kodunu login ekranında göster
+  const sub = document.querySelector('.login-sub');
+  if (sub) sub.innerHTML = `<span style="color:#f87171;font-size:12px">${e.code}<br>${e.message}</span>`;
+});
 
 auth.onAuthStateChanged(user => {
   if (user) {
