@@ -652,14 +652,28 @@ let currentUser = null;
 
 // ── AUTH ────────────────────────────────────────────────────────────
 function signIn() {
-  auth.signInWithRedirect(provider).catch(e => showToast('Giriş hatası: ' + e.message));
+  // Önce popup dene, mobile'da engelleniyor olabilir — redirect'e düş
+  auth.signInWithPopup(provider).catch(err => {
+    if (err.code === 'auth/popup-blocked' || err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
+      auth.signInWithRedirect(provider);
+    } else {
+      showToast('Giriş hatası: ' + err.code);
+      console.error(err);
+    }
+  });
 }
 function signOut() {
   auth.signOut().then(() => { closeModal('profile-modal'); });
 }
 
 // Redirect sonucunu yakala
-auth.getRedirectResult().catch(e => console.warn('Redirect:', e));
+auth.getRedirectResult().then(result => {
+  if (result && result.user) {
+    console.log('Redirect ile giriş başarılı:', result.user.email);
+  }
+}).catch(e => {
+  if (e.code !== 'auth/no-auth-event') console.warn('Redirect result:', e.code);
+});
 
 auth.onAuthStateChanged(user => {
   if (user) {
